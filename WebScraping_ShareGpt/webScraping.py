@@ -17,6 +17,10 @@ The format of saving files is based on json:
     A: An array storing the answers of conversation
 
 '''
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
 import requests
 from bs4 import BeautifulSoup
 import json
@@ -77,46 +81,69 @@ def extractConversationFrom(conversation_website):
     # print(answers)
 
     # assemble a json string of the extracted conversation
-    conversation_num = len(ids)/2
-    conversation_dict = {'num':conversation_num, 'q':questions , 'a':answers}
+    conversation_num = int(len(ids)/2)
+    conversation_dict = {'url':conversation_website.split('/')[-1], 'num':conversation_num, 'q':questions , 'a':answers}
     # conversation_jsonStr = json.dumps(conversation_dict)
 
     return conversation_dict
 
-
+# the pages of catalogue to webscrape 
 start_pages = 1
 total_pages = 1200
+
 catalog_link_prefix = "https://sharegpt.com/explore/new?page="
 conversation_page_link_prefix = "https://sharegpt.com/"
+
 saving_dir = "./conversation_jsons"
+
+# configure of chrome driver and selemium
+chrome_options = Options()
+chrome_options.add_argument("--headless")
+chrome_options.add_argument('--no-sandbox')
+s=Service(ChromeDriverManager().install())
+driver = webdriver.Chrome(service = s,options=chrome_options)
+driver.maximize_window()
+
 time_st = time.time()
 
-# jsons that store 
-json_list = []
+
+conversation_set = set() # check if there is duplicate conversation
 
 # iterate each page of the sharegpt
 for i in range(start_pages,total_pages):
-
-    r = requests.get(catalog_link_prefix + str(i)) # https://sharegpt.com/c/qYaS5cx https://sharegpt.com/explore?page=1
+    driver.get(catalog_link_prefix + str(i))
+    time.sleep(3) # wait this dynamic website load everything
     print(catalog_link_prefix + str(i))
-    soup = BeautifulSoup(r.content, 'html.parser')
+
+    html = driver.page_source
+    soup = BeautifulSoup(html, 'html.parser')
+
+    # the list of jsons in the current page (its len at most 50)
+    json_list = []
 
     # Getting the title tag
     divs = soup.find_all('div', class_='grid gap-2 flex-1')
+
+    # Iterate each div to get each conversation
     for div in divs:
         conversation_link = div.find('a').get('href')
         print(conversation_link)
+        if conversation_link in conversation_set:
+            print("This conversation has been found")
+            continue
+
         conversation_dict = extractConversationFrom(conversation_page_link_prefix + conversation_link)
-
+        
         if conversation_dict != None:
-            file_name = conversation_link.split('/')[-1]
-            file_path = os.path.join(saving_dir, file_name)
-            with open(file_path, 'w') as json_file:
-                json.dump(conversation_dict, json_file)
+            json_list.append(conversation_dict)
+            conversation_set.add(conversation_link)
+    
+    file_name = "page_" + str(i)
+    file_path = os.path.join(saving_dir, file_name)
 
-    if i == start_pages + 1:
-        break
-
+    with open(file_path, 'w') as jsonlist_file:
+        json.dump(json_list, jsonlist_file)
+    
     cur_time = time.time()
     print("Finish page %d and current total cost time: %5f" % (i, cur_time - time_st))
 
