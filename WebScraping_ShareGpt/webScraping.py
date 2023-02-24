@@ -66,7 +66,10 @@ def extractConversationFrom(conversation_website):
     # the divs of those conversation all have id
     # first question and answer are with id 0 and 1 respectively. The second Q&A have 2 and 3 and so on.
     ids = getAllIdsOfAHtml(soup)
-    assert(len(ids)%2 == 0) # cause Q&A appear as pairs, its len must be even number
+
+    if (len(ids)%2!=0):  # cause Q&A appear as pairs, its len must be even number
+        print(conversation_website + "has odd Q&A which is inconvenient to divide the conversation into Q and A")
+        return None
 
     # extract all questions and answers
     questions,answers = getAllQA(soup, ids)
@@ -81,27 +84,38 @@ def extractConversationFrom(conversation_website):
     return conversation_dict
 
 
-total_pages = 1188
-catalog_link_prefix = "https://sharegpt.com/explore?page="
+start_pages = 1
+total_pages = 1200
+catalog_link_prefix = "https://sharegpt.com/explore/new?page="
 conversation_page_link_prefix = "https://sharegpt.com/"
 saving_dir = "./conversation_jsons"
 time_st = time.time()
 
+# jsons that store 
+json_list = []
+
 # iterate each page of the sharegpt
-for i in range(1,total_pages):
+for i in range(start_pages,total_pages):
+
     r = requests.get(catalog_link_prefix + str(i)) # https://sharegpt.com/c/qYaS5cx https://sharegpt.com/explore?page=1
+    print(catalog_link_prefix + str(i))
     soup = BeautifulSoup(r.content, 'html.parser')
 
     # Getting the title tag
     divs = soup.find_all('div', class_='grid gap-2 flex-1')
     for div in divs:
         conversation_link = div.find('a').get('href')
+        print(conversation_link)
         conversation_dict = extractConversationFrom(conversation_page_link_prefix + conversation_link)
 
-        file_name = conversation_link.split('/')[-1]
-        file_path = os.path.join(saving_dir, file_name)
-        with open(file_path, 'w') as json_file:
-            json.dump(conversation_dict, json_file)
+        if conversation_dict != None:
+            file_name = conversation_link.split('/')[-1]
+            file_path = os.path.join(saving_dir, file_name)
+            with open(file_path, 'w') as json_file:
+                json.dump(conversation_dict, json_file)
+
+    if i == start_pages + 1:
+        break
 
     cur_time = time.time()
     print("Finish page %d and current total cost time: %5f" % (i, cur_time - time_st))
