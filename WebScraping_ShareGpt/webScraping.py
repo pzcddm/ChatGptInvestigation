@@ -1,5 +1,5 @@
 '''
-This file is to web scrape the website(https://sharegpt.com/) and save each shared conversation between users and chatgpt
+This python script is to web scrape the website(https://sharegpt.com/) and save each shared conversation between users and chatgpt
 The website have multiple pages and in each page, there is a list of conversations.
 The list of conversations have each conversation's url
 
@@ -12,9 +12,12 @@ Then we gonna iterate each conversation and save it into our output path
 
 Before accessing and saving a conversation, we need to define its format of our saved files.
 The format of saving files is based on json:
-    num: indicates how many conversations
-    Q: An array storing the questions of conversation
-    A: An array storing the answers of conversation
+    outermost layer is a list containing jsons,
+    the format of each json:
+        url: the url of this conversation in sharegpt server
+        num: indicates how many conversations
+        Q: An array storing the questions of conversation
+        A: An array storing the answers of conversation
 
 '''
 from selenium import webdriver
@@ -88,8 +91,8 @@ def extractConversationFrom(conversation_website):
     return conversation_dict
 
 # the pages of catalogue to webscrape 
-start_pages = 1
-total_pages = 1200
+start_pages = 293
+total_pages = 1206
 
 catalog_link_prefix = "https://sharegpt.com/explore/new?page="
 conversation_page_link_prefix = "https://sharegpt.com/"
@@ -106,44 +109,54 @@ driver.maximize_window()
 
 time_st = time.time()
 
-
+# sometimes the conversation will occur more than one time
 conversation_set = set() # check if there is duplicate conversation
 
 # iterate each page of the sharegpt
 for i in range(start_pages,total_pages):
-    driver.get(catalog_link_prefix + str(i))
-    time.sleep(3) # wait this dynamic website load everything
-    print(catalog_link_prefix + str(i))
 
-    html = driver.page_source
-    soup = BeautifulSoup(html, 'html.parser')
+    # use chrome driver to access sharegpt (a dynamic website)
+    driver.get(catalog_link_prefix + str(i))
 
     # the list of jsons in the current page (its len at most 50)
     json_list = []
 
-    # Getting the title tag
-    divs = soup.find_all('div', class_='grid gap-2 flex-1')
+    while len(json_list) ==0:
+        time.sleep(10) # wait this dynamic website load everything
+        print(catalog_link_prefix + str(i))
 
-    # Iterate each div to get each conversation
-    for div in divs:
-        conversation_link = div.find('a').get('href')
-        print(conversation_link)
-        if conversation_link in conversation_set:
-            print("This conversation has been found")
-            continue
+        html = driver.page_source
+        soup = BeautifulSoup(html, 'html.parser')
 
-        conversation_dict = extractConversationFrom(conversation_page_link_prefix + conversation_link)
-        
-        if conversation_dict != None:
-            json_list.append(conversation_dict)
-            conversation_set.add(conversation_link)
+        # Getting the title tag
+        divs = soup.find_all('div', class_='grid gap-2 flex-1')
+
+        # Iterate each div to get each conversation
+        for div in divs:
+            conversation_link = div.find('a').get('href')
+            print(conversation_link)
+            if conversation_link in conversation_set:
+                # print("This conversation has been found")
+                continue
+            
+            # access the link of the conversation and extract a json dictionary
+            conversation_dict = extractConversationFrom(conversation_page_link_prefix + conversation_link)
+            
+            if conversation_dict != None:
+                json_list.append(conversation_dict)
+                conversation_set.add(conversation_link)
+
+        # Because the website will stay the same before it return our page query. (almost in 10s)
+        if len(json_list) == 0:
+            print("The page have not been refreshed... Wait another 10s")
     
+    # write the json list file so that we can save the conversation in the current page
     file_name = "page_" + str(i)
     file_path = os.path.join(saving_dir, file_name)
-
     with open(file_path, 'w') as jsonlist_file:
         json.dump(json_list, jsonlist_file)
     
+    # Output time cost and current epoch
     cur_time = time.time()
     print("Finish page %d and current total cost time: %5f" % (i, cur_time - time_st))
 
