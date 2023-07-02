@@ -91,7 +91,7 @@ def extractConversationFrom(conversation_website):
     return conversation_dict
 
 # the pages of catalogue to webscrape 
-start_pages = 293
+start_pages = 1100
 total_pages = 1206
 
 catalog_link_prefix = "https://sharegpt.com/explore/new?page="
@@ -115,41 +115,50 @@ conversation_set = set() # check if there is duplicate conversation
 # iterate each page of the sharegpt
 for i in range(start_pages,total_pages):
 
-    # use chrome driver to access sharegpt (a dynamic website)
-    driver.get(catalog_link_prefix + str(i))
+    # count the times of waiting the website refresh its list of conversations
+    wait_count = 0
 
     # the list of jsons in the current page (its len at most 50)
     json_list = []
-
-    while len(json_list) ==0:
-        time.sleep(10) # wait this dynamic website load everything
-        print(catalog_link_prefix + str(i))
-
-        html = driver.page_source
-        soup = BeautifulSoup(html, 'html.parser')
-
-        # Getting the title tag
-        divs = soup.find_all('div', class_='grid gap-2 flex-1')
-
-        # Iterate each div to get each conversation
-        for div in divs:
-            conversation_link = div.find('a').get('href')
-            print(conversation_link)
-            if conversation_link in conversation_set:
-                # print("This conversation has been found")
-                continue
-            
-            # access the link of the conversation and extract a json dictionary
-            conversation_dict = extractConversationFrom(conversation_page_link_prefix + conversation_link)
-            
-            if conversation_dict != None:
-                json_list.append(conversation_dict)
-                conversation_set.add(conversation_link)
-
-        # Because the website will stay the same before it return our page query. (almost in 10s)
-        if len(json_list) == 0:
-            print("The page have not been refreshed... Wait another 10s")
     
+    # If we wait too long, we need to reaccess this webpage
+    while len(json_list) ==0:
+        wait_count = 0
+        # use chrome driver to access sharegpt (a dynamic website)
+        driver.get(catalog_link_prefix + str(i))
+        
+        while len(json_list) ==0 and wait_count<6:
+            time.sleep(10) # wait this dynamic website load everything
+            print(catalog_link_prefix + str(i))
+
+            html = driver.page_source
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Getting the title tag
+            divs = soup.find_all('div', class_='grid gap-2 flex-1')
+
+            # Iterate each div to get each conversation
+            for div in divs:
+                conversation_link = div.find('a').get('href')
+                print(conversation_link)
+                if conversation_link in conversation_set:
+                    # print("This conversation has been found")
+                    continue
+                
+                # access the link of the conversation and extract a json dictionary
+                conversation_dict = extractConversationFrom(conversation_page_link_prefix + conversation_link)
+                
+                if conversation_dict != None:
+                    json_list.append(conversation_dict)
+                    conversation_set.add(conversation_link)
+
+            # Because the website will stay the same before it return our page query. (almost in 10s)
+            if len(json_list) == 0:
+                print("The page have not been refreshed... Wait another 10s")
+
+            wait_count += 1
+    
+        
     # write the json list file so that we can save the conversation in the current page
     file_name = "page_" + str(i)
     file_path = os.path.join(saving_dir, file_name)
